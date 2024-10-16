@@ -1,13 +1,36 @@
-const mysql = require('mysql'); // or mysql2
+const mysql = require('mysql');
+require('dotenv').config();
 
-const connection = mysql.createConnection({
-    url: process.env.JAWSDB_URL || 'your_local_db_url_here',
-});
+let connection;
 
-connection.connect(err => {
+function handleDisconnect() {
+  connection = mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT
+  });
+
+  connection.connect((err) => {
     if (err) {
-        console.error('Error connecting to the database:', err);
-        return;
+      console.error('Error connecting to the database:', err);
+      setTimeout(handleDisconnect, 2000); // Attempt reconnection after 2 seconds
+    } else {
+      console.log('Connected to the database');
     }
-    console.log('Connected to the MySQL database.');
-});
+  });
+
+  connection.on('error', (err) => {
+    console.error('Database error', err);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+      handleDisconnect(); // Reconnect if the connection is lost
+    } else {
+      throw err;
+    }
+  });
+}
+
+handleDisconnect();
+
+module.exports = connection;
