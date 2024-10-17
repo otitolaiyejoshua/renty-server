@@ -20,9 +20,13 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
 }));
-
-app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '../uniconnect/build')));
+
+// Handle any other routes and send back the React app's index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../uniconnect/build', 'index.html'));
+});
+app.use(bodyParser.json());
 app.use('/api/properties', propertyRoutes);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/analytics', analyticsRoutes);
