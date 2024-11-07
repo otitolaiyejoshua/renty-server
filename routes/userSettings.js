@@ -22,7 +22,7 @@ const authenticateToken = (req, res, next) => {
 // Get user settings
 router.get('/:userId', authenticateToken, (req, res) => {
     const { userId } = req.params;
-    const sql = 'SELECT id, username, pnumber, role FROM users WHERE id = ?';
+    const sql = 'SELECT id, username, email, role FROM users WHERE id = ?';
     db.query(sql, [userId], (err, results) => {
         if (err) {
             console.error(err);
@@ -36,7 +36,7 @@ router.get('/:userId', authenticateToken, (req, res) => {
         const user = results[0];
         res.json({
             id: user.id,
-            pnumber: user.pnumber,
+            email: user.email,
             username:user.username,
             role: user.role
         });
@@ -46,10 +46,10 @@ router.get('/:userId', authenticateToken, (req, res) => {
 // Update user settings
 router.put('/profile', authenticateToken, (req, res) => {
     const userId = req.userId;
-    const { pnumber } = req.body;
+    const { email } = req.body;
 
-    const sql = 'UPDATE users SET pnumber = ? WHERE id = ?';
-    db.query(sql, [pnumber, userId], (err, results) => {
+    const sql = 'UPDATE users SET email = ? WHERE id = ?';
+    db.query(sql, [email, userId], (err, results) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ message: 'Internal server error' });

@@ -33,7 +33,7 @@ const authenticateToken = (req, res, next) => {
 };
 router.get('/:agentId', authenticateToken, (req, res) => {
     const { agentId } = req.params;
-    const sql = 'SELECT id, pnumber, role, idDocument, ownershipCertificate, agency_name FROM agents WHERE id = ?';;
+    const sql = 'SELECT id, email, role, idDocument, ownershipCertificate, agency_name FROM agents WHERE id = ?';;
     db.query(sql, [agentId], (err, results) => {
         if (err) {
             console.error(err);
@@ -52,7 +52,7 @@ router.get('/:agentId', authenticateToken, (req, res) => {
         
         res.json({
             id: agent.id,
-            pnumber: agent.pnumber,
+            email: agent.email,
             role: agent.role,
             idDocument: agent.idDocument,
             ownershipCertificate: agent.ownershipCertificate,
@@ -71,14 +71,14 @@ router.put('/profile/:id', authenticateToken, upload.fields([
     { name: 'ownershipCertificate', maxCount: 1 }
 ]), (req, res) => {
     const userId = req.params.id; // Get the agent ID from the URL parameters
-    const { pnumber } = req.body;
+    const { email } = req.body;
 
     // Prepare file paths
     let idDocumentPath = req.files['idDocument'] ? `uploads/${req.files['idDocument'][0].filename}` : null;
     let ownershipCertificatePath = req.files['ownershipCertificate'] ? `uploads/${req.files['ownershipCertificate'][0].filename}` : null;
 
-    const sql = 'UPDATE users SET pnumber = ?, idDocument = ?, ownershipCertificate = ? WHERE id = ?';
-    db.query(sql, [pnumber, idDocumentPath, ownershipCertificatePath, userId], (err, results) => {
+    const sql = 'UPDATE users SET email = ?, idDocument = ?, ownershipCertificate = ? WHERE id = ?';
+    db.query(sql, [email, idDocumentPath, ownershipCertificatePath, userId], (err, results) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ message: 'Internal server error' });

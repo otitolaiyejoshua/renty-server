@@ -1,240 +1,174 @@
-// server/routes/auth.js
-
 const express = require('express');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const router = express.Router();
-const db = require('../db'); // Ensure this points to your DB connection
-const twilioClient = require('../twilio'); // Import Twilio client
-const moment = require('moment'); // For time calculations
+const db = require('../db');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
+
+// Nodemailer transporter setup for Yahoo mail
+const transporter = nodemailer.createTransport({
+  service: 'yahoo',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Function to generate a 6-digit verification code
+const generateVerificationCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+// Function to generate JWT token
+const generateToken = (user) => {
+  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+};
 
 // POST /api/auth/register
 router.post('/register', (req, res) => {
-  const { username, pnumber, password, role } = req.body;
+  const { username, email, password, role } = req.body;
 
-  // Input validation
-  if (!username || !pnumber || !password || !role) {
+  if (!username || !email || !password || !role) {
     return res.status(400).send({ success: false, message: 'Please fill in all fields.' });
   }
 
-  // Hash the password
   const hashedPassword = bcrypt.hashSync(password, 8);
+  const query = role === 'user'
+    ? 'INSERT INTO users (username, email, password, role, verified) VALUES (?, ?, ?, ?, ?)'
+    : 'INSERT INTO agents (name, email, password, role, verified) VALUES (?, ?, ?, ?, ?)';
 
-  let query;
-  let params;
-
-  if (role === 'user') {
-    query = 'INSERT INTO users (username, pnumber, password, role) VALUES (?, ?, ?, ?)';
-    params = [username, pnumber, hashedPassword, role];
-  } else if (role === 'agent') {
-    query = 'INSERT INTO agents (name, pnumber, password, role) VALUES (?, ?, ?, ?)'; // Assuming `name` maps to `username`
-    params = [username, pnumber, hashedPassword, role];
-  } else {
-    return res.status(400).send({ success: false, message: 'Invalid role specified.' });
-  }
-
-  // Execute query to insert user or agent
-  db.query(query, params, (err, results) => {
+  db.query(query, [username, email, hashedPassword, role, false], (err, results) => {
     if (err) {
-      console.error('Error inserting into the database:', err);
       if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(400).send({ success: false, message: 'Phone number already exists.' });
+        return res.status(400).send({ success: false, message: 'Email already exists.' });
       }
-      return res.status(500).send({ success: false, message: 'Server error.' });
+      return res.status(500).send({ success: false, message: 'Database error during registration.' });
     }
 
-    const userId = results.insertId;
-
-    // Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Insert OTP into the otps table
-    const insertOTPQuery = 'INSERT INTO otps (pnumber, otp) VALUES (?, ?)';
-    db.query(insertOTPQuery, [pnumber, otp], (err) => {
+    // Generate and store verification code
+    const verificationCode = generateVerificationCode();
+    const insertCodeQuery = 'INSERT INTO email_verifications (email, verification_code) VALUES (?, ?) ON DUPLICATE KEY UPDATE verification_code = ?';
+    
+    db.query(insertCodeQuery, [email, verificationCode, verificationCode], (err) => {
       if (err) {
-        console.error('Error inserting OTP into database:', err);
-        return res.status(500).send({ success: false, message: 'Server error while generating OTP.' });
+        return res.status(500).send({ success: false, message: 'Database error while generating verification code.' });
       }
 
-      // Send OTP via Twilio
-      twilioClient.messages
-        .create({
-          body: `Your OTP code is ${otp}`,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: pnumber,
-        })
-        .then((message) => {
-          console.log('OTP sent:', message.sid);
-          res.status(201).send({
-            success: true,
-            message: `${role} registered successfully. OTP sent to ${pnumber}.`,
-            userId,
-          });
-        })
-        .catch((error) => {
-          console.error('Twilio Error:', error);
-          res.status(500).send({ success: false, message: 'Failed to send OTP. Please try again.' });
+      // Send verification email
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Email Verification Code',
+        text: `Your verification code is ${verificationCode}`,
+      };
+
+      transporter.sendMail(mailOptions, (error) => {
+        if (error) {
+          return res.status(500).send({ success: false, message: 'Failed to send verification code. Please try again.' });
+        }
+        res.status(201).send({
+          success: true,
+          message: `${role} registered successfully. Verification code sent to ${email}.`,
         });
+      });
     });
   });
 });
 
-// POST /api/auth/verify-otp
-router.post('/verify-otp', (req, res) => {
-  const { pnumber, otp } = req.body;
+// POST /api/auth/login
+router.post('/login', (req, res) => {
+  const { email, password } = req.body;
 
-  // Input validation
-  if (!pnumber || !otp) {
-    return res.status(400).send({ success: false, message: 'Please provide phone number and OTP.' });
+  if (!email || !password) {
+    return res.status(400).send({ success: false, message: 'Please provide email and password.' });
   }
 
-  // Fetch the latest OTP for the phone number
-  const fetchOTPQuery = 'SELECT * FROM otps WHERE pnumber = ? ORDER BY created_at DESC LIMIT 1';
-  db.query(fetchOTPQuery, [pnumber], (err, results) => {
+  const userQuery = 'SELECT * FROM users WHERE email = ?';
+  const agentQuery = 'SELECT * FROM agents WHERE email = ?';
+
+  // Check if user exists in either 'users' or 'agents' tables
+  db.query(userQuery, [email], (err, userResults) => {
     if (err) {
-      console.error('Error fetching OTP:', err);
-      return res.status(500).send({ success: false, message: 'Server error.' });
-    }
-
-    if (results.length === 0) {
-      return res.status(400).send({ success: false, message: 'No OTP found for this phone number.' });
-    }
-
-    const latestOTP = results[0];
-
-    // Check if OTP matches
-    if (latestOTP.otp !== otp) {
-      return res.status(400).send({ success: false, message: 'Invalid OTP.' });
-    }
-
-    // Check if OTP is within 5 minutes
-    const otpCreationTime = moment(latestOTP.created_at);
-    const currentTime = moment();
-    const diffMinutes = currentTime.diff(otpCreationTime, 'minutes');
-
-    if (diffMinutes > 5) {
-      return res.status(400).send({ success: false, message: 'OTP has expired. Please request a new one.' });
-    }
-
-    // OTP is valid; mark the user as verified
-    // Determine if the pnumber exists in users or agents table
-    const checkUserQuery = 'SELECT * FROM users WHERE pnumber = ?';
-    db.query(checkUserQuery, [pnumber], (err, userResults) => {
-      if (err) {
-        console.error('Error checking user table:', err);
-        return res.status(500).send({ success: false, message: 'Server error.' });
-      }
-
-      if (userResults.length > 0) {
-        // Update verified status in users table
-        const updateUserQuery = 'UPDATE users SET verified = TRUE WHERE pnumber = ?';
-        db.query(updateUserQuery, [pnumber], (err) => {
-          if (err) {
-            console.error('Error updating user verification:', err);
-            return res.status(500).send({ success: false, message: 'Server error.' });
-          }
-
-          return res.status(200).send({ success: true, message: 'Phone number verified successfully.' });
-        });
-      } else {
-        // Check in agents table
-        const checkAgentQuery = 'SELECT * FROM agents WHERE pnumber = ?';
-        db.query(checkAgentQuery, [pnumber], (err, agentResults) => {
-          if (err) {
-            console.error('Error checking agents table:', err);
-            return res.status(500).send({ success: false, message: 'Server error.' });
-          }
-
-          if (agentResults.length > 0) {
-            // Update verified status in agents table
-            const updateAgentQuery = 'UPDATE agents SET verified = TRUE WHERE pnumber = ?';
-            db.query(updateAgentQuery, [pnumber], (err) => {
-              if (err) {
-                console.error('Error updating agent verification:', err);
-                return res.status(500).send({ success: false, message: 'Server error.' });
-              }
-
-              return res.status(200).send({ success: true, message: 'Phone number verified successfully.' });
-            });
-          } else {
-            // Phone number not found in any table
-            return res.status(400).send({ success: false, message: 'User not found.' });
-          }
-        });
-      }
-    });
-  });
-});
-
-// POST /api/auth/resend-otp
-router.post('/resend-otp', (req, res) => {
-  const { pnumber } = req.body;
-
-  // Input validation
-  if (!pnumber) {
-    return res.status(400).send({ success: false, message: 'Please provide a phone number.' });
-  }
-
-  // Check if user exists and is not verified
-  const checkUserQuery = 'SELECT * FROM users WHERE pnumber = ?';
-  db.query(checkUserQuery, [pnumber], (err, userResults) => {
-    if (err) {
-      console.error('Error checking users table:', err);
-      return res.status(500).send({ success: false, message: 'Server error.' });
+      return res.status(500).send({ success: false, message: 'Database error during login.' });
     }
 
     if (userResults.length > 0) {
-      const user = userResults[0];
-      if (user.verified) {
-        return res.status(400).send({ success: false, message: 'Phone number already verified.' });
-      }
-    } else {
-      // Check in agents table
-      const checkAgentQuery = 'SELECT * FROM agents WHERE pnumber = ?';
-      db.query(checkAgentQuery, [pnumber], (err, agentResults) => {
-        if (err) {
-          console.error('Error checking agents table:', err);
-          return res.status(500).send({ success: false, message: 'Server error.' });
-        }
-
-        if (agentResults.length > 0) {
-          const agent = agentResults[0];
-          if (agent.verified) {
-            return res.status(400).send({ success: false, message: 'Phone number already verified.' });
-          }
-        } else {
-          // Phone number not found in any table
-          return res.status(400).send({ success: false, message: 'User not found.' });
-        }
-      });
+      return handleLogin(userResults[0], password, res);
     }
 
-    // Generate a new OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Insert the new OTP into the otps table
-    const insertOTPQuery = 'INSERT INTO otps (pnumber, otp) VALUES (?, ?)';
-    db.query(insertOTPQuery, [pnumber, otp], (err) => {
+    db.query(agentQuery, [email], (err, agentResults) => {
       if (err) {
-        console.error('Error inserting OTP into database:', err);
-        return res.status(500).send({ success: false, message: 'Server error while generating OTP.' });
+        return res.status(500).send({ success: false, message: 'Database error during login.' });
       }
 
-      // Send OTP via Twilio
-      twilioClient.messages
-        .create({
-          body: `Your OTP code is ${otp}`,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: pnumber,
-        })
-        .then((message) => {
-          console.log('OTP resent:', message.sid);
-          res.status(200).send({ success: true, message: 'OTP resent successfully.' });
-        })
-        .catch((error) => {
-          console.error('Twilio Error:', error);
-          res.status(500).send({ success: false, message: 'Failed to resend OTP. Please try again.' });
-        });
+      if (agentResults.length > 0) {
+        return handleLogin(agentResults[0], password, res);
+      }
+
+      return res.status(404).send({ success: false, message: 'User not found.' });
+    });
+  });
+});
+
+// Helper function to handle login
+function handleLogin(user, password, res) {
+  if (!bcrypt.compareSync(password, user.password)) {
+    return res.status(400).send({ success: false, message: 'Invalid password.' });
+  }
+
+  if (!user.verified) {
+    return res.status(403).send({ success: false, message: 'Please verify your email to log in.' });
+  }
+
+  // Generate JWT token using the new helper function
+  const token = generateToken(user);
+
+  // Send additional user information in the response
+  res.status(200).send({
+    success: true,
+    message: 'Login successful.',
+    token,
+    userId: user.id,
+    email: user.email,
+    userRole: user.role,
+    name: user.username,
+  });
+}
+
+// POST /api/auth/verify-email
+router.post('/verify-email', (req, res) => {
+  const { email, verificationCode } = req.body;
+
+  if (!email || !verificationCode) {
+    return res.status(400).send({ success: false, message: 'Please provide email and verification code.' });
+  }
+
+  const verifyCodeQuery = 'SELECT * FROM email_verifications WHERE email = ? AND verification_code = ?';
+
+  db.query(verifyCodeQuery, [email, verificationCode], (err, results) => {
+    if (err) {
+      return res.status(500).send({ success: false, message: 'Database error while verifying code.' });
+    }
+
+    if (results.length === 0) {
+      return res.status(400).send({ success: false, message: 'Invalid verification code.' });
+    }
+
+    const updateQuery = email.endsWith('@agentdomain.com')
+      ? 'UPDATE agents SET verified = TRUE WHERE email = ?'
+      : 'UPDATE users SET verified = TRUE WHERE email = ?';
+
+    db.query(updateQuery, [email], (err) => {
+      if (err) {
+        return res.status(500).send({ success: false, message: 'Database error while updating verification status.' });
+      }
+
+      db.query('DELETE FROM email_verifications WHERE email = ?', [email], (err) => {
+        if (err) {
+          return res.status(500).send({ success: false, message: 'Database error during cleanup.' });
+        }
+
+        res.status(200).send({ success: true, message: 'Email verified successfully.' });
+      });
     });
   });
 });
