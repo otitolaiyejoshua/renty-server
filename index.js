@@ -57,10 +57,11 @@ io.on('connection', (socket) => {
         console.log('User disconnected');
     });
 });
+app.use(express.static(path.join(__dirname, 'uniconnect/build')));
+
 app.get('*', (req, res) => {
-  res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+    res.sendFile(path.join(__dirname + '/uniconnect/build/index.html'));
 });
-app.use(express.static(path.join(__dirname, 'client', 'build')));
 
 app.use(bodyParser.json());
 app.use('/api/properties', propertyRoutes);
