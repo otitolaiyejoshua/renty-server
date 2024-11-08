@@ -1,47 +1,55 @@
-const authRoutes = require('./routes/auth');
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const chatRoutes = require('./routes/chat.js');
+const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
+const db = require('./db');
+require('dotenv').config();
+
+// Import route modules
+const authRoutes = require('./routes/auth');
+const chatRoutes = require('./routes/chat');
 const propertyRoutes = require('./routes/property');
 const paymentsRouter = require('./routes/payment');
 const analyticsRoutes = require('./routes/analytics');
 const userSettingsRoutes = require('./routes/userSettings'); // New
 const agentSettingsRoutes = require('./routes/agentSettings'); // New
-const path = require('path');
-const http = require('http'); // Import http
-const { Server } = require('socket.io'); // Import Socket.IO
-const db = require('./db');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Use CORS
+// CORS configuration
 const corsOptions = {
-    origin: 'http://localhost:3000', // Your frontend URL
+    origin: 'http://localhost:3000', // Your frontend URL (React development server)
     methods: ['GET', 'POST'],
     credentials: true,
 };
-
 app.use(cors(corsOptions));
 
-// Create HTTP server and attach Socket.IO
+// Middleware setup
+app.use(bodyParser.json());
+
+// Serve React frontend from the 'uniconnect/build' folder
+// Ensure you provide the correct path to the React app's build directory
+const buildPath = path.join(__dirname, '..', 'uniconnect', 'build');
+app.use(express.static(buildPath));
+
+// Socket.IO setup
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: corsOptions // Apply CORS options to Socket.IO
+    cors: corsOptions,
 });
 
-// Set up socket.io connection
+// Socket.IO connection handler
 io.on('connection', (socket) => {
     console.log('A user connected');
 
-    // Handle group messages
+    // Group message handling
     socket.on('sendGroupMessage', (message) => {
-        // Broadcast the message to all connected clients
         io.emit('receiveGroupMessage', message);
 
-        // Save the message to the database
+        // Save to database
         const { userId, userName, message: msg } = message;
         const timestamp = new Date();
 
@@ -53,26 +61,30 @@ io.on('connection', (socket) => {
         });
     });
 
+    // Disconnect event
     socket.on('disconnect', () => {
         console.log('User disconnected');
     });
 });
-app.use(express.static(path.join(__dirname, 'uniconnect/build')));
 
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname + '/uniconnect/build/index.html'));
-});
-
-app.use(bodyParser.json());
+// Routes setup
 app.use('/api/properties', propertyRoutes);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/userSettings', userSettingsRoutes); // Mount user settings routes
-app.use('/api/agentSettings', agentSettingsRoutes); // Mount agent settings routes
+app.use('/api/userSettings', userSettingsRoutes); // User settings route
+app.use('/api/agentSettings', agentSettingsRoutes); // Agent settings route
 app.use('/api/chat', chatRoutes); 
+
+// Route to serve the React app's index.html for any non-API request
+app.get('*', (req, res) => {
+    res.sendFile(path.join(buildPath, 'index.html'));
+});
+
+// Static file serving for uploaded files (images, etc.)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Start server
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
