@@ -4,8 +4,10 @@
     "main": "index.js",
     "scripts": {
         "start": "node index.js",
-        "dev": "nodemon index.js"
+        "dev": "nodemon index.js",
+        "heroku-postbuild": "NPM_CONFIG_PRODUCTION=false npm install --prefix ../uniconnect && npm run build --prefix ../uniconnect"
     },
+
     "keywords": [],
     "author": "",
     "license": "ISC",
