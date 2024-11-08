@@ -57,6 +57,11 @@ io.on('connection', (socket) => {
         console.log('User disconnected');
     });
 });
+app.get('*', (req, res) => {
+  res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+});
+app.use(express.static(path.join(__dirname, 'client', 'build')));
+
 app.use(bodyParser.json());
 app.use('/api/properties', propertyRoutes);
 app.use('/api/payments', paymentsRouter);
