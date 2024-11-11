@@ -27,7 +27,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Set up static file serving for React build folder
-app.use(express.static(path.join(__dirname, 'uniconnect/build'))); 
+app.use(express.static(path.join(__dirname, '/build'))); 
 
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
@@ -75,7 +75,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Catch-all handler to serve index.html for client-side routing
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'uniconnect/build', 'index.html'));
+  res.sendFile(path.join(__dirname, '/build', 'index.html'));
 });
 
 // Start the server
