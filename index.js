@@ -20,18 +20,23 @@ const PORT = process.env.PORT || 5000;
 
 // CORS options
 const corsOptions = {
-    origin: 'https://uniconnect.africa/', // Your frontend URL
-    methods: ['GET', 'POST'],
+    origin: 'https://uniconnect.africa', // Corrected: Removed trailing slash
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Add any other methods your app uses
     credentials: true,
 };
 app.use(cors(corsOptions));
 
 // Set up static file serving for React build folder
+app.use(express.static(path.join(__dirname, 'uniconnect/build'))); 
 
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: corsOptions // Apply CORS options to Socket.IO
+    cors: {
+        origin: 'https://uniconnect.africa', // Match the CORS origin
+        methods: ['GET', 'POST'],
+        credentials: true,
+    }
 });
 
 // Set up socket.io connection
@@ -69,14 +74,11 @@ app.use('/api/chat', chatRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Catch-all handler to serve index.html for client-side routing
-app.use(express.static(path.join(__dirname, 'build')));
-
-// Catch-all handler for all other routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  res.sendFile(path.join(__dirname, 'uniconnect/build', 'index.html'));
 });
+
 // Start the server
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
