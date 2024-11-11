@@ -20,7 +20,7 @@ const PORT = process.env.PORT || 5000;
 
 // CORS options
 const corsOptions = {
-    origin: 'http://localhost:3000', // Your frontend URL
+    origin: 'https://uniconnect.africa/', // Your frontend URL
     methods: ['GET', 'POST'],
     credentials: true,
 };
