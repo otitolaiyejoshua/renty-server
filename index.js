@@ -27,8 +27,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Set up static file serving for React build folder
-const buildPath = path.join(__dirname, '..', 'uniconnect', 'build');
-app.use(express.static(buildPath));
+app.use(express.static(path.join(__dirname, 'build')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
 
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
@@ -69,13 +73,6 @@ app.use('/api/userSettings', userSettingsRoutes);
 app.use('/api/agentSettings', agentSettingsRoutes);
 app.use('/api/chat', chatRoutes); 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Catch-all handler to serve index.html for client-side routing
-app.get('*', (req, res) => {
-    res.sendFile(path.join(buildPath, 'index.html'));
-});
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// Start the server
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
