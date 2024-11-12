@@ -26,7 +26,15 @@ router.get('/users/:email', (req, res) => {
         res.json(results);
     });
 });
-
+router.get('/group', (req, res) => {
+    const query = 'SELECT * FROM group_messages ORDER BY timestamp ASC';
+    db.query(query, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(results);
+    });
+});
 // Fetch private messages between two users
 router.get('/private/:userId/:receiverId', (req, res) => {
     const { userId, receiverId } = req.params;
