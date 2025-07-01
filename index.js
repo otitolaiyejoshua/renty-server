@@ -18,12 +18,12 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS options
 const corsOptions = {
-    origin: 'http://127.0.0.1', // Corrected: Removed trailing slash
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Add any other methods your app uses
-    credentials: true,
+  origin: ['http://localhost:3000', 'https://your-react-app.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
 };
+
 app.use(cors(corsOptions));
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
