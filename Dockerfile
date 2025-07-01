@@ -1,21 +1,19 @@
-# Use Node.js official image
+# Use official Node.js image
 FROM node:18
 
-# Set the working directory inside the container
+# Create app directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
+# Install app dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy all remaining app files
+# Copy app source
 COPY . .
 
-# Set environment variables if needed (Render sets PORT automatically)
-ENV PORT=5000
-
-# Expose the port your app runs on
+# Expose the port
 EXPOSE 5000
 
-# Start your server (use index.js)
-CMD ["node", "index.js"]
+# Start the app
+CMD ["npm", "start"]
+
