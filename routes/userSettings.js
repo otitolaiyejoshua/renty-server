@@ -1,7 +1,7 @@
 // routes/userSettings.js
 const express = require('express');
 const db = require('../db'); // Assuming db is your database connection file
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const router = express.Router();
