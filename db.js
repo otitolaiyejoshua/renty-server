@@ -1,7 +1,9 @@
 const mysql = require('mysql');
+const fs = require('fs'); // ⬅️ Import fs to read the CA certificate
 require('dotenv').config();
 
 let connection;
+
 console.log('Connecting to DB with:', process.env.DB_HOST, process.env.DB_USER);
 
 function handleDisconnect() {
@@ -12,7 +14,7 @@ function handleDisconnect() {
     database: process.env.DB_NAME,
     port: process.env.DB_PORT,
     ssl: {
-      rejectUnauthorized: true // Ensures SSL is used (Aiven requires it)
+      ca: fs.readFileSync('./ca.pem') // ✅ Load Aiven's certificate
     }
   });
 
