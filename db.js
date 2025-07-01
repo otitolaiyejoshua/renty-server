@@ -1,4 +1,4 @@
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const fs = require('fs'); // ⬅️ Import fs to read the CA certificate
 require('dotenv').config();
 
