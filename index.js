@@ -35,6 +35,11 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
+app.use((req, res, next) => {
+  console.log('REQUEST:', req.method, req.path, 'ORIGIN:', req.headers.origin);
+  next();
+});
+
 // HTTP + Socket.IO setup
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -81,11 +86,6 @@ app.use('/api/userSettings', userSettingsRoutes);
 app.use('/api/agentSettings', agentSettingsRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-
-app.use((req, res, next) => {
-  console.log('REQUEST:', req.method, req.path, 'ORIGIN:', req.headers.origin);
-  next();
-});
 // Health check route
 app.get('/', (req, res) => {
   res.send('✅ Renty backend is running');
