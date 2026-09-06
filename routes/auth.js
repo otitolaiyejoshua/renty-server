@@ -5,17 +5,28 @@ const router = express.Router();
 const db = require('../db');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
-
+console.log('EMAIL USER:', process.env.EMAIL_USER);
+console.log('EMAIL PASS LOADED:', !!process.env.EMAIL_PASS);
+console.log('EMAIL PASS LENGTH:', process.env.EMAIL_PASS?.length);
 // Nodemailer transporter setup for Yahoo mail
 const transporter = nodemailer.createTransport({
-  service: 'yahoo',
+  host: 'smtp.mail.yahoo.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
 
-// Function to generate a 6-digit verification code
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ EMAIL CONFIGURATION ERROR:');
+    console.error(error);
+  } else {
+    console.log('✅ Yahoo email transporter is ready');
+  }
+});
 const generateVerificationCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 // Function to generate JWT token
@@ -61,79 +72,110 @@ router.post('/register', (req, res) => {
         text: `Your verification code is ${verificationCode}`,
       };
 
-      transporter.sendMail(mailOptions, (error) => {
-        if (error) {
-          return res.status(500).send({ success: false, message: 'Failed to send verification code. Please try again.' });
-        }
-        res.status(201).send({
-          success: true,
-          message: `${role} registered successfully. Verification code sent to ${email}.`,
-        });
-      });
+     transporter.sendMail(mailOptions, (error, info) => {
+  if (error) {
+    console.error('❌ EMAIL SEND ERROR:');
+    console.error(error);
+
+    return res.status(500).send({
+      success: false,
+      message: 'Failed to send verification code. Please try again.'
+    });
+  }
+
+  console.log('✅ VERIFICATION EMAIL SENT');
+  console.log('Message ID:', info.messageId);
+  console.log('Response:', info.response);
+
+  return res.status(201).send({
+    success: true,
+    message: `${role} registered successfully. Verification code sent to ${email}.`,
+  });
+});
     });
   });
 });
 
 // POST /api/auth/login
+// POST /api/auth/login
 router.post('/login', (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).send({ success: false, message: 'Please provide email and password.' });
+  if (!email || !password || !role) {
+    return res.status(400).send({
+      success: false,
+      message: 'Please provide email, password and account type.'
+    });
   }
 
-  const userQuery = 'SELECT * FROM users WHERE email = ?';
-  const agentQuery = 'SELECT * FROM agents WHERE email = ?';
+  let query;
 
-  // Check if user exists in either 'users' or 'agents' tables
-  db.query(userQuery, [email], (err, userResults) => {
+  if (role === 'agent') {
+    query = 'SELECT * FROM agents WHERE email = ?';
+  } else {
+    query = 'SELECT * FROM users WHERE email = ?';
+  }
+
+  db.query(query, [email], (err, results) => {
     if (err) {
-      return res.status(500).send({ success: false, message: 'Database error during login.' });
+      console.error('Login database error:', err);
+
+      return res.status(500).send({
+        success: false,
+        message: 'Database error during login.'
+      });
     }
 
-    if (userResults.length > 0) {
-      return handleLogin(userResults[0], password, res);
+    if (results.length === 0) {
+      return res.status(404).send({
+        success: false,
+        message: role === 'agent'
+          ? 'Agent account not found.'
+          : 'User account not found.'
+      });
     }
 
-    db.query(agentQuery, [email], (err, agentResults) => {
-      if (err) {
-        return res.status(500).send({ success: false, message: 'Database error during login.' });
-      }
-
-      if (agentResults.length > 0) {
-        return handleLogin(agentResults[0], password, res);
-      }
-
-      return res.status(404).send({ success: false, message: 'User not found.' });
-    });
+    handleLogin(results[0], password, role, res);
   });
 });
-
 // Helper function to handle login
-function handleLogin(user, password, res) {
+function handleLogin(user, password, role, res) {
   if (!bcrypt.compareSync(password, user.password)) {
-    return res.status(400).send({ success: false, message: 'Invalid password.' });
+    return res.status(400).send({
+      success: false,
+      message: 'Invalid password.'
+    });
   }
 
   if (!user.verified) {
-    return res.status(403).send({ success: false, message: 'Please verify your email to log in.' });
+    return res.status(403).send({
+      success: false,
+      message: 'Please verify your email to log in.'
+    });
   }
 
-  // Generate JWT token using the new helper function
-  const token = generateToken(user);
+  const token = generateToken({
+    id: user.id,
+    role: role
+  });
 
-  // Send additional user information in the response
   res.status(200).send({
     success: true,
     message: 'Login successful.',
     token,
-    userId: user.id,
+
+    userId: role === 'user' ? user.id : null,
+    agentId: role === 'agent' ? user.id : null,
+
     email: user.email,
-    userRole: user.role,
-    name: user.username,
+    userRole: role,
+
+    // Users have username, agents have name
+    name: role === 'agent'
+      ? user.name
+      : user.username
   });
 }
-
 // POST /api/auth/verify-email
 router.post('/verify-email', (req, res) => {
   const { email, verificationCode } = req.body;

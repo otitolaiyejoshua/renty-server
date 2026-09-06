@@ -1,8 +1,8 @@
 const express = require('express');
-const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const http = require('http');
+const cors = require('cors');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
@@ -18,10 +18,25 @@ const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Development CORS
 app.use(cors({
-  origin: ['https://renty-client.vercel.app'], // <-- Use your real frontend URL
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-access-token'
+  ],
+  credentials: true
+}));
+app.use(cors({
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-access-token'
+  ],
   credentials: true
 }));
 
@@ -31,7 +46,7 @@ app.use(bodyParser.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'https://renty-client.vercel.app',
+    origin: 'https://localhost:3000',
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -70,6 +85,11 @@ app.use('/api/userSettings', userSettingsRoutes);
 app.use('/api/agentSettings', agentSettingsRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+
+app.use((req, res, next) => {
+  console.log('REQUEST:', req.method, req.path, 'ORIGIN:', req.headers.origin);
+  next();
+});
 // Health check route
 app.get('/', (req, res) => {
   res.send('✅ Renty backend is running');

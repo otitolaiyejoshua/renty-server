@@ -1,45 +1,32 @@
 const mysql = require('mysql2');
 require('dotenv').config();
 
-let connection;
+const db = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME,
+  port: Number(process.env.DB_PORT) || 3306,
 
-console.log(
-    'Connecting to DB with:',
-    process.env.DB_HOST,
-    process.env.DB_USER,
-    process.env.DB_NAME
-);
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
-function handleDisconnect() {
-    connection = mysql.createConnection({
-        host: process.env.DB_HOST,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
-        port: Number(process.env.DB_PORT)
-    });
+// Test the database connection
+db.getConnection((err, connection) => {
+  if (err) {
+    console.error('❌ Error connecting to the database:', err.message);
+    return;
+  }
 
-    connection.connect((err) => {
-        if (err) {
-            console.error('Error connecting to the database:', err);
+  console.log('Connected to local MySQL database ✅');
+  connection.release();
+});
 
-            setTimeout(handleDisconnect, 2000);
-        } else {
-            console.log('Connected to local MySQL database ✅');
-        }
-    });
+// Handle pool errors
+db.on('error', (err) => {
+  console.error('❌ Database error:', err.message);
+});
 
-    connection.on('error', (err) => {
-        console.error('Database error:', err);
-
-        if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-            handleDisconnect();
-        } else {
-            throw err;
-        }
-    });
-}
-
-handleDisconnect();
-
-module.exports = connection;
+module.exports = db;
