@@ -20,17 +20,10 @@ const PORT = process.env.PORT || 5000;
 
 // Development CORS
 app.use(cors({
-  origin: 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'x-access-token'
+  origin: [
+    'http://localhost:3000',
+    'https://renty-client.vercel.app'
   ],
-  credentials: true
-}));
-app.use(cors({
-  origin: 'http://localhost:3000',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
@@ -46,7 +39,10 @@ app.use(bodyParser.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'https://localhost:3000',
+    origin: [
+      'http://localhost:3000',
+      'https://renty-client.vercel.app'
+    ],
     methods: ['GET', 'POST'],
     credentials: true
   }
