@@ -2,14 +2,19 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const router = express.Router();
 const db = require('../db'); // Ensure this points to your DB configuration
+const uploadDir = path.join(__dirname, '../uploads');
 
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 // Set up Multer storage configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/'); // Ensure this directory exists
-  },
+  cb(null, uploadDir);
+},
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   }
@@ -114,6 +119,33 @@ router.delete('/delete/:id', (req, res) => {
     res.status(200).json({ message: 'Property deleted successfully.' });
   });
 });
+router.get('/search/:query', (req, res) => {
+  const { query } = req.params;
+  if (!query) {
+    return res.status(400).json({ error: 'Query parameter is required.' });
+  }
+  const searchQuery = `SELECT * FROM properties WHERE university = ?`;
+
+  db.query(searchQuery, [query], (err, results) => {
+    if (err) {
+      console.error('Error fetching search results:', err);
+      return res.status(500).json({ error: 'Error fetching search results.' });
+    }
+
+    res.json(results); // Array of property objects matching the university
+  });
+});
+router.get('/', (req, res) => {
+  const query = 'SELECT * FROM properties';
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('Error fetching properties:', err);
+      res.status(500).json({ error: 'Failed to fetch properties.' });
+    } else {
+      res.json(results);
+    }
+  });
+});
 
 // GET route to fetch properties by agentId
 router.get('/:agentId', (req, res) => {
@@ -131,33 +163,7 @@ router.get('/:agentId', (req, res) => {
 });
 
 // GET route to fetch all properties
-router.get('/', (req, res) => {
-  const query = 'SELECT * FROM properties';
-  db.query(query, (err, results) => {
-    if (err) {
-      console.error('Error fetching properties:', err);
-      res.status(500).json({ error: 'Failed to fetch properties.' });
-    } else {
-      res.json(results);
-    }
-  });
-});
 
-router.get('/search/:query', (req, res) => {
-  const { query } = req.params;
-  if (!query) {
-    return res.status(400).json({ error: 'Query parameter is required.' });
-  }
-  const searchQuery = `SELECT * FROM properties WHERE university = ?`;
 
-  db.query(searchQuery, [query], (err, results) => {
-    if (err) {
-      console.error('Error fetching search results:', err);
-      return res.status(500).json({ error: 'Error fetching search results.' });
-    }
-
-    res.json(results); // Array of property objects matching the university
-  });
-});
 
 module.exports = router;
